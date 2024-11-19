@@ -28,6 +28,7 @@ class VectorStore:
         '''
         self.dimension = dimension
         self.index = faiss.IndexFlatL2(dimension)
+        #self.index=
         self.documents: List[Document] = []
 
     def add_documents(self, documents: List[Document], embeddings: np.ndarray):
@@ -51,7 +52,7 @@ class VectorStore:
         except Exception as e:
             raise Exception(f"向量存储添加文档时出错：{str(e)}")
 
-    def search(self, query_embedding: np.ndarray, k: int = 5) -> List[Tuple[Document, float]]:
+    def search(self, query_embedding: np.ndarray, k: int = 10) -> List[Tuple[Document, float]]:
         '''
         使用查询向量搜索相似文档
         
@@ -117,6 +118,6 @@ class VectorStore:
     def add_vectors(self, vectors):
         self.index.add(vectors)  # Add vectors to the index
 
-    def search_vectors(self, query_vector, k=5):
+    def search_vectors(self, query_vector, k=10):
         distances, indices = self.index.search(np.array([query_vector]), k)
         return indices

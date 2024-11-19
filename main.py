@@ -25,6 +25,8 @@ def init_session_state():
                 dimension=st.session_state.embedding_model.get_embedding_dimension()
             )
             st.session_state.document_processor = DocumentProcessor()
+            st.session_state.processed_files = {}  # 跟踪已处理的文件
+            #print('加载向量模型成功')
         except Exception as e:
             st.error(f"初始化嵌入模型时出错：{str(e)}")
             st.session_state.embedding_model = None
@@ -34,6 +36,7 @@ def init_session_state():
     if 'llm_handler' not in st.session_state:
         try:
             model_path = os.environ.get("LLM_MODEL_PATH", "/media/mynewdrive/llm_store/model_store/qwen2-7b-instruct")
+            #print(model_path)
             if not os.path.exists(model_path):
                 st.warning(f"模型路径未找到：{model_path}")
                 st.info("请设置 LLM_MODEL_PATH 环境变量指向您的 Qwen 模型。")
@@ -57,7 +60,7 @@ def display_chat_history():
                         for source in message["sources"]:
                             st.write(source)
 
-def process_question(question: str):
+def process_question(question: str) -> Response:
     """Process a user question and generate a response."""
     try:
         if not st.session_state.llm_handler:
@@ -65,39 +68,37 @@ def process_question(question: str):
                 answer="抱歉，语言模型未正确初始化。请确保模型路径设置正确。",
                 confidence=0.0
             )
-        
         question_embedding = st.session_state.embedding_model.generate_embeddings(question)
         search_results = st.session_state.vector_store.search(
             question_embedding,
-            k=3
+            k=10
         )
-        
         context = []
         for doc, score in search_results:
             context.append(f"[来源：{doc.metadata['filename']}, 片段：{doc.metadata['chunk_id'] + 1}/{doc.metadata['total_chunks']}]\n{doc.content}")
         
         recent_history = st.session_state.chat_history[-8:] if len(st.session_state.chat_history) > 0 else None
-        
-        response_placeholder = st.empty()
-        response_text = ""
-        
-        for partial_response in st.session_state.llm_handler.generate_response_stream(
+        response = st.session_state.llm_handler.generate_response(
             question=question,
             context=context,
             chat_history=recent_history
-        ):
-            response_text += partial_response
-            response_placeholder.markdown(f"**助手：** {response_text}")
-        
-        return response_text
+        )
+        return response
         
     except Exception as e:
         st.error(f"处理问题时出错：{str(e)}")
-        return "抱歉，处理您的问题时遇到错误。请重试。"
+        return Response(
+            answer="抱歉，处理您的问题时遇到错误。请重试。",
+            confidence=0.0
+        )
 
 def process_uploaded_file(uploaded_file):
-    """Process an uploaded file and add it to the vector store."""
+    """Process an uploaded file and add it to the store."""
     try:
+        if uploaded_file.name in st.session_state.processed_files:
+            st.info(f"文件 {uploaded_file.name} 已经被处理过。")
+            return st.session_state.processed_files[uploaded_file.name]
+        
         documents = st.session_state.document_processor.process_file(
             uploaded_file,
             uploaded_file.name
@@ -117,14 +118,41 @@ def process_uploaded_file(uploaded_file):
         progress_bar.empty()
         status_text.empty()
         
+        st.session_state.processed_files[uploaded_file.name] = len(documents)
         return len(documents)
         
     except Exception as e:
         raise Exception(f"处理文件时出错：{str(e)}")
 
+def send():
+    """Callback function to handle sending the question."""
+    if st.session_state.question:
+        # 添加用户消息到聊天历史
+        st.session_state.chat_history.append({
+            "role": "user",
+            "content": st.session_state.question
+        })
+        
+        # 处理问题并获取回复
+        response = process_question(st.session_state.question)
+        
+        # 添加助手回复到聊天历史
+        st.session_state.chat_history.append({
+            "role": "assistant",
+            "content": response.answer,
+            "sources": response.sources,
+            "confidence": response.confidence,
+            "tool_calls": response.tool_calls
+        })
+        
+        # 清空输入框
+        st.session_state.question = ""
+    else:
+        st.warning("请输入问题。")
+
 def main():
     st.set_page_config(
-        page_title="AIR",
+        page_title="IDICC-AIR",    # 网页标签页的标题
         page_icon="🤖",
         layout="wide"
     )
@@ -133,9 +161,11 @@ def main():
     init_session_state()
     st.title("AIR, 你的产业情报助手")
     
+    # Sidebar for file upload and settings
     with st.sidebar:
         st.header("设置")
         
+        # File upload for document ingestion
         uploaded_files = st.file_uploader(
             "上传文档",
             type=["txt", "pdf", "docx"],
@@ -144,36 +174,25 @@ def main():
         
         if uploaded_files:
             for uploaded_file in uploaded_files:
-                try:
-                    with st.spinner(f"正在处理 {uploaded_file.name}..."):
-                        num_chunks = process_uploaded_file(uploaded_file)
-                        st.success(f"成功将 {uploaded_file.name} 处理为 {num_chunks} 个片段！")
-                        
-                except Exception as e:
-                    st.error(f"处理 {uploaded_file.name} 时出错：{str(e)}")
+                if uploaded_file.name not in st.session_state.processed_files:
+                    try:
+                        with st.spinner(f"正在处理 {uploaded_file.name}..."):
+                            num_chunks = process_uploaded_file(uploaded_file)
+                            st.success(f"成功将 {uploaded_file.name} 处理为 {num_chunks} 个片段！")
+                            
+                    except Exception as e:
+                        st.error(f"处理 {uploaded_file.name} 时出错：{str(e)}")
+                else:
+                    st.info(f"文件 {uploaded_file.name} 已经被处理过。")
     
+    # Main chat interface
     display_chat_history()
     
-    question = st.text_input("请输入您的问题：")
+    # Question input with key and callback
+    st.text_input("请输入您的问题：", key='question')
     
-    if st.button("发送"):
-        if question:
-            st.session_state.chat_history.append({
-                "role": "user",
-                "content": question
-            })
-            
-            response = process_question(question)
-            
-            st.session_state.chat_history.append({
-                "role": "assistant",
-                "content": response
-            })
-            
-            st.session_state.question = ""
-            st.rerun()
-        else:
-            st.warning("请输入问题。")
+    st.button("发送", on_click=send)
+    
 
 if __name__ == "__main__":
     main()

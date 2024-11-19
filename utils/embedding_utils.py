@@ -34,7 +34,7 @@ class EmbeddingModel:
         #self.model = SentenceTransformer(modules=[self.word_embedding_model])
         #self.model = SentenceTransformer(self.model_name,local_files_only=True)
         self.model = SentenceTransformer(self.model_name)
-        #('vector model loaded')
+        #print('vector model loaded')
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         #print(self.device)
         self.model.to(self.device)

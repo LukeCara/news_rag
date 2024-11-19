@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
 文件说明：此模块实现了LLM处理和响应生成功能
 
@@ -33,7 +34,7 @@ class LLMHandler:
             Exception: 模型加载失败时抛出
         '''
         try:
-            self.model = AutoModelForCausalLM.from_pretrained(model_path,torch_dtype="auto",local_files_only=True)
+            #self.model = AutoModelForCausalLM.from_pretrained(model_path,torch_dtype="auto",local_files_only=True)
             #需要加上local_files_only=True,速度会变快
             #self.model= AutoModelForCausalLM.from_pretrained(model_path,torch_dtype="auto",device_map="auto")
             #self.model = AutoModelForCausalLM.from_pretrained(model_path,)
@@ -43,7 +44,6 @@ class LLMHandler:
             #)
             self.tools = Tools()
             self.tool_descriptions = self.tools.get_tool_descriptions()
-            #print("llm loaded succussfully")
         except Exception as e:
             raise Exception(f"初始化LLM失败：{str(e)}")
 
@@ -69,17 +69,16 @@ class LLMHandler:
         '''
         try:
             # 准备带有上下文和对话历史的提示词
-            prompt = self._prepare_prompt(question, context, chat_history)
-            #print("llm 3rd pass")
+            prompt = self._prepare_prompt(question, context, chat_history) #提供最初的提示词，包含上下文、历史对话、工具描述等
             #print(prompt)
-            # 生成响应
+            # 生成中间结果,大模型挑选工具（前提是大模型）
             response = self._generate_text(prompt)
-            #print("llm 4th pass")
             # 解析响应和处理工具调用
             parsed_response = self._parse_response(response)
-            
+            print(f"parsed response is{parsed_response}")
             # 执行工具调用并生成最终响应
             if "tool_calls" in parsed_response:
+                print("开始调用工具")
                 tool_results = self._execute_tool_calls(parsed_response["tool_calls"])
                 final_response = self._generate_text(
                     self._prepare_followup_prompt(question, parsed_response, tool_results)
@@ -132,38 +131,15 @@ class LLMHandler:
         
         prompt += f"\n当前问题：{question}\n"
         prompt += "可用工具：\n"
-        prompt += json.dumps(self.tool_descriptions, indent=2) + "\n"
+        prompt += json.dumps(self.tool_descriptions, ensure_ascii=False,indent=2) + "\n" #确保输入的描述为中文
+        #prompt += json.dumps(self.tool_descriptions, indent=2) + "\n"
+
+        print(f"1----输入问题后，_prepare_prompt为----\n：{prompt}\n ------------")
         return prompt
 
-    # def _generate_text(self, prompt: str) -> str:
-    #     '''
-    #     使用LLM生成文本
-        
-    #     参数:
-    #         prompt: str - 输入提示词
-            
-    #     返回:
-    #         str - 生成的文本
-            
-    #     异常:
-    #         Exception: 生成过程中的错误
-    #     '''
-    #     try:
-    #         inputs = self.model.tokenizer(prompt, return_tensors="pt")
-    #         outputs = self.model.generate(
-    #             inputs.input_ids,
-    #             max_new_tokens=512,
-    #             temperature=0.7,
-    #             top_p=0.9
-    #         )#需要返回str
-    #         response = self.model.tokenizer.decode(outputs[0], skip_special_tokens=True)
-    #         print(type(response))
-    #         return response
-    #     except Exception as e:
-    #         raise Exception(f"生成文本时出错：{str(e)}")
     def _generate_text(self, prompt: str) -> str:
         '''
-        使用LLM生成文本
+        使用LLM生成文本,该函数生成的为中间结果以及一次性结果（非流式），还需要进一步进行解析
         
         参数:
             prompt: str - 输入提示词
@@ -176,24 +152,7 @@ class LLMHandler:
         '''
         try:
             response=chat_history.chat(prompt, chat_history.history)
-            print(response)
             return response
-            # tokenizer = AutoTokenizer.from_pretrained("qwen2-7b-instruct")
-            # print("generate_text 1st pass")
-            # inputs = tokenizer(prompt, return_tensors="pt")
-            # #print(inputs)
-            # print("generate_text 2nd pass")
-            # with torch.no_grad(): 
-            #     outputs = self.model.generate(
-            #         **inputs,
-            #         max_new_tokens=1024,
-            #         temperature=0.7,
-            #         top_p=0.9
-            #     )
-            #     print("generate_text 3rd pass")
-            #     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            #     print(type(response))
-            #     return response
         except Exception as e:
             raise Exception(f"生成文本时出错：{str(e)}")
 
@@ -209,8 +168,10 @@ class LLMHandler:
         '''
         try:
             # 尝试解析为JSON
+            print(f"解析为json格式为{json.loads(response)}")
             return json.loads(response)
         except:
+            #print(f"response.strip()为{response.strip()}")
             # 降级为基础文本响应
             return {
                 "answer": response.strip(),
@@ -268,4 +229,5 @@ class LLMHandler:
         prompt += "工具执行结果：\n"
         prompt += json.dumps(tool_results, indent=2) + "\n"
         prompt += "请根据工具执行结果提供最终答案。"
+        print(f"_prepare follow up 的提示为：{prompt}")
         return prompt

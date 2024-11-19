@@ -28,8 +28,8 @@ class DocumentProcessor:
         配置文本分割器参数，包括块大小和重叠长度
         '''
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
+            chunk_size=500,
+            chunk_overlap=100,
             length_function=len
         )
 
@@ -59,7 +59,7 @@ class DocumentProcessor:
             elif ext == '.docx':
                 text = self._process_docx(file)
             elif ext == '.txt':
-                text = file.read().decode('utf-8')
+                text = file.read().decode('utf-8')#若为txt文件，则直接通过read()方法读取文件内容
             else:
                 raise ValueError(f"不支持的文件类型：{ext}")
 
@@ -126,11 +126,12 @@ class DocumentProcessor:
                 text += paragraph.text + "\n"
             return text
         except Exception as e:
-            raise Exception(f"处��DOCX时出错：{str(e)}")
+            raise Exception(f"处理DOCX时出错：{str(e)}")
 
     def process_document(self, text):
         # Assuming BAAI-BGE model is used for embedding
         # This function should preprocess the text for the model
         # Example: tokenization, removing special characters, etc.
         processed_text = text.lower().replace('[^\w\s]', '')
+        #processed_text = re.sub(r'[^\w\s]', '', text.lower())
         return processed_text

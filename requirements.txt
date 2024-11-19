@@ -1,9 +1,0 @@
-streamlit
-faiss-cpu
-sentence-transformers
-ctransformers
-pypdf
-python-docx
-langchain
-torch
-pydantic

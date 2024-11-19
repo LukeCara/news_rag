@@ -1,8 +1,10 @@
 from openai import OpenAI
  
 client = OpenAI(
-    api_key = "token-abc123",
-    base_url = "http://192.168.68.61:8000/v1",
+    #api_key = "token-abc123", # 本地模型api-key
+    api_key = 'sk-e59bb34cf3f14d2296526aa27896cf04',#阿里云Dashscope api-key
+    base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1", #阿里云Dashscope地址
+    #base_url = "http://192.168.68.61:8000/v1", #本地模型地址
 )
  
 history = [
@@ -15,7 +17,8 @@ def chat(query, history):
         "content": query
     })
     completion = client.chat.completions.create(
-        model="qwen25-14b",
+        #model="qwen25-14b", #本地模型名称
+        model="qwen-turbo",
         messages=history,
         temperature=0.2,
     )
