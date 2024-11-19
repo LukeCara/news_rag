@@ -1,8 +1,7 @@
 from openai import OpenAI
  
 client = OpenAI(
-    #api_key = "token-abc123", # 本地模型api-key
-    api_key = 'sk-e59bb34cf3f14d2296526aa27896cf04',#阿里云Dashscope api-key
+    api_key = "token-abc123", # 本地模型api-key
     base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1", #阿里云Dashscope地址
     #base_url = "http://192.168.68.61:8000/v1", #本地模型地址
 )
